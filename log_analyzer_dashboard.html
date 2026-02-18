@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log Analyzer Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #090d13;
+    --surface: #0f1520;
+    --surface2: #162030;
+    --border: #1e2d42;
+    --text: #c8d8e8;
+    --muted: #4a6278;
+    --accent: #00d4ff;
+    --critical: #ff2d55;
+    --high: #ff6b35;
+    --medium: #ffc13d;
+    --low: #4ade80;
+    --glow: 0 0 20px rgba(0, 212, 255, 0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 212, 255, 0.015) 2px,
+      rgba(0, 212, 255, 0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* Header */
+  header {
+    padding: 28px 40px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(180deg, rgba(0,212,255,0.04) 0%, transparent 100%);
+    position: relative;
+  }
+
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    color: #fff;
+    letter-spacing: -0.5px;
+  }
+
+  .logo span { color: var(--accent); }
+
+  .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+  }
+
+  .pulse {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--low);
+    box-shadow: 0 0 8px var(--low);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Main layout */
+  main {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 0;
+    min-height: calc(100vh - 73px);
+  }
+
+  /* Sidebar */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    grid-row: 1 / 3;
+  }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* Stat cards */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .stat-card:hover { border-color: var(--accent); }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    opacity: 0.4;
+  }
+
+  .stat-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 26px;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* Alert severity pills */
+  .severity-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .sev-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+
+  .sev-row:hover, .sev-row.active {
+    background: var(--surface2);
+    border-color: var(--border);
+  }
+
+  .sev-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .sev-name {
+    flex: 1;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text);
+  }
+
+  .sev-count {
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .sev-bar {
+    height: 3px;
+    border-radius: 2px;
+    margin-top: 4px;
+    transition: width 0.8s ease;
+  }
+
+  /* Top IPs */
+  .ip-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .ip-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+
+  .ip-row:last-child { border-bottom: none; }
+
+  .ip-addr {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ip-count {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  /* Content area */
+  .content {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Input panel */
+  .input-panel {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .input-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .log-textarea {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 12px;
+    height: 120px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+    line-height: 1.6;
+  }
+
+  .log-textarea:focus { border-color: var(--accent); }
+  .log-textarea::placeholder { color: var(--muted); }
+
+  .btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .btn-primary:hover {
+    background: #fff;
+    box-shadow: 0 0 20px rgba(0,212,255,0.4);
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* Alerts table */
+  .alerts-panel {
+    flex: 1;
+    overflow: auto;
+    padding: 20px 24px;
+  }
+
+  .alerts-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .filter-pills {
+    display: flex;
+    gap: 6px;
+  }
+
+  .pill {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+
+  .pill.active, .pill:hover {
+    background: var(--surface2);
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
+  /* Alert cards */
+  .alert-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .alert-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: start;
+    cursor: pointer;
+    transition: all 0.15s;
+    animation: slideIn 0.3s ease forwards;
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  @keyframes slideIn {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .alert-card:hover {
+    border-color: var(--accent);
+    background: var(--surface2);
+  }
+
+  .alert-card.expanded .evidence {
+    display: block;
+  }
+
+  .sev-badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+
+  .CRITICAL { background: rgba(255,45,85,0.15); color: var(--critical); border: 1px solid rgba(255,45,85,0.3); }
+  .HIGH { background: rgba(255,107,53,0.15); color: var(--high); border: 1px solid rgba(255,107,53,0.3); }
+  .MEDIUM { background: rgba(255,193,61,0.15); color: var(--medium); border: 1px solid rgba(255,193,61,0.3); }
+  .LOW { background: rgba(74,222,128,0.15); color: var(--low); border: 1px solid rgba(74,222,128,0.3); }
+
+  .alert-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .alert-category {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .alert-desc {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.4;
+  }
+
+  .alert-meta {
+    display: flex;
+    gap: 16px;
+    margin-top: 4px;
+  }
+
+  .meta-chip {
+    font-size: 11px;
+    color: var(--accent);
+    opacity: 0.8;
+  }
+
+  .evidence {
+    display: none;
+    margin-top: 10px;
+    padding: 10px;
+    background: var(--bg);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.7;
+    word-break: break-all;
+  }
+
+  .expand-icon {
+    font-size: 16px;
+    color: var(--muted);
+    margin-top: 4px;
+    transition: transform 0.2s;
+    user-select: none;
+  }
+
+  .alert-card.expanded .expand-icon { transform: rotate(180deg); }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+
+  .empty h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  /* Color mapping */
+  .CRITICAL-dot { background: var(--critical); box-shadow: 0 0 6px var(--critical); }
+  .HIGH-dot { background: var(--high); box-shadow: 0 0 6px var(--high); }
+  .MEDIUM-dot { background: var(--medium); box-shadow: 0 0 6px var(--medium); }
+  .LOW-dot { background: var(--low); box-shadow: 0 0 6px var(--low); }
+
+  .CRITICAL-bar { background: var(--critical); }
+  .HIGH-bar { background: var(--high); }
+  .MEDIUM-bar { background: var(--medium); }
+  .LOW-bar { background: var(--low); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">LOG<span>SCAN</span></div>
+  <div class="status-badge">
+    <div class="pulse"></div>
+    <span id="status-text">Ready to analyze</span>
+  </div>
+</header>
+
+<main>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div>
+      <div class="section-label">Overview</div>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-lines">—</div>
+          <div class="stat-label">Lines</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-parsed">—</div>
+          <div class="stat-label">Parsed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-ips">—</div>
+          <div class="stat-label">Unique IPs</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-alerts">—</div>
+          <div class="stat-label">Alerts</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Severity Breakdown</div>
+      <div class="severity-breakdown" id="sev-breakdown">
+        <div class="sev-row" style="opacity:0.3">
+          <div class="sev-dot CRITICAL-dot"></div>
+          <div class="sev-name">Critical</div>
+          <div class="sev-count">—</div>
+        </div>
+        <div class="sev-row" style="opacity:0.3">
+          <div class="sev-dot HIGH-dot"></div>
+          <div class="sev-name">High</div>
+          <div class="sev-count">—</div>
+        </div>
+        <div class="sev-row" style="opacity:0.3">
+          <div class="sev-dot MEDIUM-dot"></div>
+          <div class="sev-name">Medium</div>
+          <div class="sev-count">—</div>
+        </div>
+        <div class="sev-row" style="opacity:0.3">
+          <div class="sev-dot LOW-dot"></div>
+          <div class="sev-name">Low</div>
+          <div class="sev-count">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Top Source IPs</div>
+      <div class="ip-list" id="ip-list">
+        <div style="color: var(--muted); font-size: 12px;">Analyze logs to see IPs</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="content">
+    <!-- Input -->
+    <div class="input-panel">
+      <div class="section-label" style="margin-bottom:10px">Paste Log Lines</div>
+      <div class="input-row">
+        <textarea class="log-textarea" id="log-input" 
+          placeholder="Paste Apache/Nginx access logs, SSH auth logs, or any log with IPs and timestamps..."></textarea>
+        <div class="btn-stack">
+          <button class="btn btn-primary" onclick="analyze()">▶ ANALYZE</button>
+          <button class="btn btn-secondary" onclick="loadDemo()">DEMO</button>
+          <button class="btn btn-secondary" onclick="clearAll()">CLEAR</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="alerts-panel">
+      <div class="alerts-header">
+        <div class="section-label" style="margin:0">Alerts</div>
+        <div class="filter-pills">
+          <button class="pill active" onclick="filterAlerts('ALL', this)">ALL</button>
+          <button class="pill" onclick="filterAlerts('CRITICAL', this)">CRITICAL</button>
+          <button class="pill" onclick="filterAlerts('HIGH', this)">HIGH</button>
+          <button class="pill" onclick="filterAlerts('MEDIUM', this)">MEDIUM</button>
+          <button class="pill" onclick="filterAlerts('LOW', this)">LOW</button>
+        </div>
+      </div>
+      <div class="alert-list" id="alert-list">
+        <div class="empty">
+          <h3>No analysis yet</h3>
+          <p>Paste log lines above and click Analyze, or load the demo.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ─────────────────────────────────────────
+// Log Parser (mirrors Python logic in JS)
+// ─────────────────────────────────────────
+const Config = {
+  FAILED_LOGIN_THRESHOLD: 15,
+  BRUTE_FORCE_WINDOW_SEC: 60,
+  RAPID_REQUEST_THRESHOLD: 100,
+  REPEATED_PATTERN_THRESHOLD: 20,
+};
+
+function parseLines(text) {
+  const APACHE_RE = /^(\S+)\s+\S+\s+(\S+)\s+\[([^\]]+)\]\s+"(\S+)\s+(\S+)\s+\S+"\s+(\d{3})\s+\S+(?:\s+"[^"]*"\s+"([^"]*)")?/;
+  const SSH_FAILED = /Failed (?:password|publickey) for (?:invalid user )?(\S+) from (\S+)/;
+  const SSH_SUCCESS = /Accepted (?:password|publickey) for (\S+) from (\S+)/;
+  const GENERIC_IP = /(\d{1,3}(?:\.\d{1,3}){3})/;
+  const GENERIC_TS = /(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/;
+
+  return text.trim().split('\n').map((raw, i) => {
+    const e = { raw: raw.trim(), line: i+1, ip: null, method: null, path: null,
+                 status: null, ua: null, username: null, type: null, ts: null };
+    if (!e.raw) return e;
+
+    const am = APACHE_RE.exec(raw);
+    if (am) {
+      e.ip = am[1]; e.username = am[2] !== '-' ? am[2] : null;
+      e.method = am[4]; e.path = am[5]; e.status = parseInt(am[6]);
+      e.ua = am[7] || null; e.type = 'access';
+      try {
+        const parts = am[3].split(/[\/:]/);
+        const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+        e.ts = new Date(parts[4], months[parts[1]], parts[0], parts[2], parts[3], parts[4]);
+      } catch(_) {}
+      return e;
+    }
+
+    const sf = SSH_FAILED.exec(raw);
+    if (sf) { e.username = sf[1]; e.ip = sf[2]; e.status = 401; e.type = 'auth'; return e; }
+
+    const ss = SSH_SUCCESS.exec(raw);
+    if (ss) { e.username = ss[1]; e.ip = ss[2]; e.status = 200; e.type = 'auth'; return e; }
+
+    const gip = GENERIC_IP.exec(raw);
+    if (gip) { e.ip = gip[1]; e.type = 'generic'; }
+    const gts = GENERIC_TS.exec(raw);
+    if (gts) { try { e.ts = new Date(gts[1]); } catch(_) {} }
+
+    return e;
+  }).filter(e => e.raw);
+}
+
+function runDetectors(entries) {
+  const alerts = [];
+  const ipFails = {}, ipReqs = {}, ipUsers = {}, pathCounts = {}, ipPaths = {};
+
+  for (const e of entries) {
+    if (!e.ip) continue;
+    if (!ipReqs[e.ip]) ipReqs[e.ip] = [];
+    ipReqs[e.ip].push(e);
+
+    if (e.status === 401 || e.status === 403) {
+      if (!ipFails[e.ip]) ipFails[e.ip] = [];
+      ipFails[e.ip].push(e);
+      if (e.username) {
+        if (!ipUsers[e.ip]) ipUsers[e.ip] = new Set();
+        ipUsers[e.ip].add(e.username);
+      }
+    }
+
+    if (e.path) {
+      pathCounts[e.path] = (pathCounts[e.path]||0)+1;
+      if (!ipPaths[e.ip]) ipPaths[e.ip] = {};
+      ipPaths[e.ip][e.path] = (ipPaths[e.ip][e.path]||0)+1;
+    }
+  }
+
+  // Brute force
+  for (const [ip, evts] of Object.entries(ipFails)) {
+    if (evts.length >= Config.FAILED_LOGIN_THRESHOLD) {
+      alerts.push({
+        severity: evts.length >= 30 ? 'CRITICAL' : 'HIGH',
+        category: 'BRUTE_FORCE',
+        description: `${evts.length} failed login attempts from ${ip}`,
+        ip,
+        evidence: evts.slice(0,3).map(e=>e.raw.substring(0,120))
+      });
+    }
+  }
+
+  // Credential stuffing
+  for (const [ip, users] of Object.entries(ipUsers)) {
+    if (users.size >= 5) {
+      alerts.push({
+        severity: 'CRITICAL',
+        category: 'CREDENTIAL_STUFFING',
+        description: `${ip} targeted ${users.size} different usernames`,
+        ip,
+        evidence: [...users].slice(0,10)
+      });
+    }
+  }
+
+  // IP anomalies
+  const SENSITIVE_PATHS_RE = [
+    /\/admin/i, /\/\.env/i, /\/wp-admin/i, /\/phpmyadmin/i, /\/config/i,
+    /\/backup/i, /\.git/i, /\/etc\/passwd/i, /\/proc\//i, /\.sql$/i,
+    /\/api\/v\d+\/users/i, /\/login/i, /\.php$/i
+  ];
+  const BAD_AGENTS = ['sqlmap','nikto','nmap','masscan','zgrab','python-requests','curl','wget','scrapy'];
+
+  for (const [ip, evts] of Object.entries(ipReqs)) {
+    // High volume
+    if (evts.length >= Config.RAPID_REQUEST_THRESHOLD) {
+      alerts.push({
+        severity: 'HIGH',
+        category: 'IP_ANOMALY',
+        description: `${ip} sent ${evts.length} requests — possible scanner/DoS`,
+        ip
+      });
+    }
+
+    // Suspicious UA
+    for (const e of evts) {
+      if (e.ua) {
+        const ua = e.ua.toLowerCase();
+        for (const kw of BAD_AGENTS) {
+          if (ua.includes(kw)) {
+            alerts.push({
+              severity: 'MEDIUM',
+              category: 'SUSPICIOUS_USER_AGENT',
+              description: `${ip} used suspicious agent: ${e.ua.substring(0,80)}`,
+              ip,
+              evidence: [e.ua]
+            });
+            break;
+          }
+        }
+      }
+    }
+
+    // Error count
+    const errCount = evts.filter(e=>e.status&&e.status>=400).length;
+    if (errCount >= 30) {
+      alerts.push({
+        severity: 'MEDIUM',
+        category: 'IP_ANOMALY',
+        description: `${ip} triggered ${errCount} error responses — possible scanning`,
+        ip
+      });
+    }
+
+    // Sensitive paths
+    const sensitiveHits = evts.filter(e=>e.path && SENSITIVE_PATHS_RE.some(r=>r.test(e.path)));
+    const uniqueSens = [...new Set(sensitiveHits.map(e=>e.path))];
+    if (uniqueSens.length >= 3) {
+      alerts.push({
+        severity: 'HIGH',
+        category: 'SENSITIVE_PATH_SCAN',
+        description: `${ip} accessed ${uniqueSens.length} sensitive paths`,
+        ip,
+        evidence: uniqueSens.slice(0,6)
+      });
+    }
+  }
+
+  // Path traversal
+  const TRAVERSAL = /\.\.\/|\.\.\\|%2e%2e|%252e/i;
+  for (const e of entries) {
+    if (e.path && TRAVERSAL.test(e.path)) {
+      alerts.push({
+        severity: 'CRITICAL',
+        category: 'PATH_TRAVERSAL',
+        description: `Directory traversal attempt: ${e.path.substring(0,80)}`,
+        ip: e.ip,
+        evidence: [e.raw.substring(0,120)]
+      });
+    }
+  }
+
+  // Repeated paths
+  for (const [path, count] of Object.entries(pathCounts)) {
+    if (count >= Config.REPEATED_PATTERN_THRESHOLD) {
+      alerts.push({
+        severity: 'LOW',
+        category: 'REPEATED_ACCESS',
+        description: `Path '${path}' accessed ${count} times`,
+        evidence: [path]
+      });
+    }
+  }
+
+  // Path enumeration
+  for (const [ip, paths] of Object.entries(ipPaths)) {
+    const n = Object.keys(paths).length;
+    if (n >= 50) {
+      alerts.push({
+        severity: 'MEDIUM',
+        category: 'PATH_ENUMERATION',
+        description: `${ip} scanned ${n} unique paths — enumeration`,
+        ip
+      });
+    }
+  }
+
+  // Deduplicate
+  const seen = new Set();
+  return alerts.filter(a => {
+    const key = `${a.category}|${a.ip}|${a.description.substring(0,50)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).sort((a,b) => {
+    return ['CRITICAL','HIGH','MEDIUM','LOW'].indexOf(a.severity) -
+           ['CRITICAL','HIGH','MEDIUM','LOW'].indexOf(b.severity);
+  });
+}
+
+// ─────────────────────────────────────────
+// State
+// ─────────────────────────────────────────
+let currentAlerts = [];
+let currentFilter = 'ALL';
+
+function analyze() {
+  const text = document.getElementById('log-input').value.trim();
+  if (!text) return;
+
+  document.getElementById('status-text').textContent = 'Analyzing...';
+
+  setTimeout(() => {
+    const entries = parseLines(text);
+    const alerts = runDetectors(entries);
+    currentAlerts = alerts;
+
+    // Stats
+    const ips = [...new Set(entries.map(e=>e.ip).filter(Boolean))];
+    document.getElementById('stat-lines').textContent = entries.length;
+    document.getElementById('stat-parsed').textContent = entries.filter(e=>e.ip||e.ts).length;
+    document.getElementById('stat-ips').textContent = ips.length;
+    document.getElementById('stat-alerts').textContent = alerts.length;
+
+    // IP counts
+    const ipCounts = {};
+    for (const e of entries) if (e.ip) ipCounts[e.ip] = (ipCounts[e.ip]||0)+1;
+    const topIPs = Object.entries(ipCounts).sort((a,b)=>b[1]-a[1]).slice(0,7);
+
+    const ipList = document.getElementById('ip-list');
+    ipList.innerHTML = topIPs.map(([ip,cnt]) =>
+      `<div class="ip-row"><span class="ip-addr">${ip}</span><span class="ip-count">${cnt} req</span></div>`
+    ).join('') || '<div style="color:var(--muted);font-size:12px">No IPs found</div>';
+
+    // Severity breakdown
+    const sevCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+    for (const a of alerts) sevCounts[a.severity]++;
+    const maxCount = Math.max(...Object.values(sevCounts), 1);
+
+    document.getElementById('sev-breakdown').innerHTML = Object.entries(sevCounts).map(([sev, cnt]) =>
+      `<div class="sev-row" onclick="filterAlerts('${sev}', null)">
+        <div class="sev-dot ${sev}-dot"></div>
+        <div>
+          <div style="display:flex;align-items:center;gap:40px;justify-content:space-between">
+            <span class="sev-name">${sev}</span>
+            <span class="sev-count">${cnt}</span>
+          </div>
+          <div class="sev-bar ${sev}-bar" style="width:${cnt/maxCount*100}%"></div>
+        </div>
+      </div>`
+    ).join('');
+
+    document.getElementById('status-text').textContent = `${alerts.length} alerts found`;
+    renderAlerts();
+  }, 50);
+}
+
+function renderAlerts() {
+  const filtered = currentFilter === 'ALL' 
+    ? currentAlerts 
+    : currentAlerts.filter(a => a.severity === currentFilter);
+
+  const list = document.getElementById('alert-list');
+
+  if (!currentAlerts.length) {
+    list.innerHTML = '<div class="empty"><h3>✓ No threats detected</h3><p>No suspicious patterns found in these logs.</p></div>';
+    return;
+  }
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty"><h3>No ${currentFilter} alerts</h3><p>Try a different severity filter.</p></div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map((a, i) => `
+    <div class="alert-card" style="animation-delay:${i*0.04}s" onclick="toggleCard(this)">
+      <div class="sev-badge ${a.severity}">${a.severity}</div>
+      <div class="alert-body">
+        <div class="alert-category">${a.category.replace(/_/g,' ')}</div>
+        <div class="alert-desc">${a.description}</div>
+        <div class="alert-meta">
+          ${a.ip ? `<span class="meta-chip">⊙ ${a.ip}</span>` : ''}
+        </div>
+        ${a.evidence && a.evidence.length
+          ? `<div class="evidence"><strong style="color:var(--accent);font-size:10px;letter-spacing:1px">EVIDENCE</strong><br>${a.evidence.map(ev=>`→ ${ev}`).join('<br>')}</div>`
+          : ''}
+      </div>
+      <div class="expand-icon">▾</div>
+    </div>
+  `).join('');
+}
+
+function toggleCard(el) {
+  el.classList.toggle('expanded');
+}
+
+function filterAlerts(sev, btn) {
+  currentFilter = sev;
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderAlerts();
+}
+
+function clearAll() {
+  document.getElementById('log-input').value = '';
+  currentAlerts = [];
+  document.getElementById('stat-lines').textContent = '—';
+  document.getElementById('stat-parsed').textContent = '—';
+  document.getElementById('stat-ips').textContent = '—';
+  document.getElementById('stat-alerts').textContent = '—';
+  document.getElementById('alert-list').innerHTML = '<div class="empty"><h3>Cleared</h3><p>Paste new log data to analyze.</p></div>';
+  document.getElementById('status-text').textContent = 'Ready to analyze';
+}
+
+function loadDemo() {
+  document.getElementById('log-input').value = `192.168.1.50 - - [17/Feb/2026:10:01:01 +0000] "POST /login HTTP/1.1" 401 512 "-" "Mozilla/5.0"
+192.168.1.50 - - [17/Feb/2026:10:01:02 +0000] "POST /login HTTP/1.1" 401 512 "-" "Mozilla/5.0"
+192.168.1.50 - - [17/Feb/2026:10:01:03 +0000] "POST /login HTTP/1.1" 401 512 "-" "Mozilla/5.0"
+192.168.1.50 - - [17/Feb/2026:10:01:04 +0000] "POST /login HTTP/1.1" 401 512 "-" "Mozilla/5.0"
+192.168.1.50 - - [17/Feb/2026:10:01:05 +0000] "POST /login HTTP/1.1" 401 512 "-" "Mozilla/5.0"
+192.168.1.50 - - [17/Feb/2026:10:01:06 +0000] "POST /login HTTP/1.1" 401 512 "-" "Mozilla/5.0"
+203.0.113.77 - - [17/Feb/2026:10:02:00 +0000] "GET /admin HTTP/1.1" 403 256 "-" "sqlmap/1.6"
+203.0.113.77 - - [17/Feb/2026:10:02:01 +0000] "GET /.env HTTP/1.1" 404 128 "-" "sqlmap/1.6"
+203.0.113.77 - - [17/Feb/2026:10:02:02 +0000] "GET /wp-admin HTTP/1.1" 404 128 "-" "sqlmap/1.6"
+203.0.113.77 - - [17/Feb/2026:10:02:03 +0000] "GET /phpmyadmin HTTP/1.1" 404 128 "-" "sqlmap/1.6"
+203.0.113.77 - - [17/Feb/2026:10:02:04 +0000] "GET /.git/config HTTP/1.1" 200 1024 "-" "sqlmap/1.6"
+203.0.113.77 - - [17/Feb/2026:10:02:05 +0000] "GET /backup.sql HTTP/1.1" 200 1024 "-" "sqlmap/1.6"
+198.51.100.1 - - [17/Feb/2026:10:03:00 +0000] "GET /../../etc/passwd HTTP/1.1" 400 256 "-" "curl/7.68"
+10.0.0.5 - admin [17/Feb/2026:10:05:00 +0000] "GET /dashboard HTTP/1.1" 200 4096 "-" "Mozilla/5.0"
+10.0.0.5 - alice [17/Feb/2026:10:05:30 +0000] "GET /api/users HTTP/1.1" 200 2048 "-" "Mozilla/5.0"
+10.0.0.5 - bob [17/Feb/2026:10:05:31 +0000] "GET /api/users HTTP/1.1" 401 512 "-" "Mozilla/5.0"
+10.0.0.5 - charlie [17/Feb/2026:10:05:32 +0000] "GET /api/users HTTP/1.1" 401 512 "-" "Mozilla/5.0"
+10.0.0.5 - dave [17/Feb/2026:10:05:33 +0000] "GET /api/users HTTP/1.1" 401 512 "-" "Mozilla/5.0"
+10.0.0.5 - eve [17/Feb/2026:10:05:34 +0000] "GET /api/users HTTP/1.1" 401 512 "-" "Mozilla/5.0"
+10.0.0.5 - frank [17/Feb/2026:10:05:35 +0000] "GET /api/users HTTP/1.1" 401 512 "-" "Mozilla/5.0"`;
+  analyze();
+}
+</script>
+</body>
+</html>

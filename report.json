@@ -1,0 +1,115 @@
+{
+  "meta": {
+    "source": "<inline>",
+    "analyzed_at": "2026-02-18T12:34:05.285931",
+    "total_lines": 24,
+    "parsed_entries": 23,
+    "unique_ips": 5
+  },
+  "summary": {
+    "CRITICAL": 1,
+    "HIGH": 3,
+    "MEDIUM": 2
+  },
+  "top_ips": [
+    [
+      "192.168.1.50",
+      15
+    ],
+    [
+      "203.0.113.77",
+      5
+    ],
+    [
+      "198.51.100.1",
+      1
+    ],
+    [
+      "10.0.0.9",
+      1
+    ],
+    [
+      "10.0.0.8",
+      1
+    ]
+  ],
+  "status_distribution": {
+    "401": 15,
+    "403": 1,
+    "404": 3,
+    "200": 3,
+    "400": 1
+  },
+  "alerts": [
+    {
+      "severity": "CRITICAL",
+      "category": "PATH_TRAVERSAL",
+      "ip": "198.51.100.1",
+      "description": "Traversal attempt: /../../etc/passwd",
+      "timestamp": "2026-02-17T10:03:00",
+      "evidence": [
+        "198.51.100.1 - - [17/Feb/2026:10:03:00 +0000] \"GET /../../etc/passwd HTTP/1.1\" 400 256 \"-\" \"curl/7.68\""
+      ]
+    },
+    {
+      "severity": "HIGH",
+      "category": "BRUTE_FORCE",
+      "ip": "192.168.1.50",
+      "description": "15 failed login attempts from 192.168.1.50",
+      "timestamp": "2026-02-17T10:01:15",
+      "evidence": [
+        "192.168.1.50 - - [17/Feb/2026:10:01:01 +0000] \"POST /login HTTP/1.1\" 401 512 \"-\" \"Mozilla/5.0\"",
+        "192.168.1.50 - - [17/Feb/2026:10:01:02 +0000] \"POST /login HTTP/1.1\" 401 512 \"-\" \"Mozilla/5.0\"",
+        "192.168.1.50 - - [17/Feb/2026:10:01:03 +0000] \"POST /login HTTP/1.1\" 401 512 \"-\" \"Mozilla/5.0\"",
+        "192.168.1.50 - - [17/Feb/2026:10:01:04 +0000] \"POST /login HTTP/1.1\" 401 512 \"-\" \"Mozilla/5.0\"",
+        "192.168.1.50 - - [17/Feb/2026:10:01:05 +0000] \"POST /login HTTP/1.1\" 401 512 \"-\" \"Mozilla/5.0\""
+      ]
+    },
+    {
+      "severity": "HIGH",
+      "category": "RAPID_BRUTE_FORCE",
+      "ip": "192.168.1.50",
+      "description": "15 failures from 192.168.1.50 within 60s",
+      "timestamp": "2026-02-17T10:01:01",
+      "evidence": [
+        "192.168.1.50 - - [17/Feb/2026:10:01:01 +0000] \"POST /login HTTP/1.1\" 401 512 \"-\" \"Mozilla/5.0\"",
+        "192.168.1.50 - - [17/Feb/2026:10:01:02 +0000] \"POST /login HTTP/1.1\" 401 512 \"-\" \"Mozilla/5.0\"",
+        "192.168.1.50 - - [17/Feb/2026:10:01:03 +0000] \"POST /login HTTP/1.1\" 401 512 \"-\" \"Mozilla/5.0\""
+      ]
+    },
+    {
+      "severity": "HIGH",
+      "category": "SENSITIVE_PATH_SCAN",
+      "ip": "203.0.113.77",
+      "description": "203.0.113.77 accessed 5 sensitive paths",
+      "timestamp": null,
+      "evidence": [
+        "/phpmyadmin",
+        "/wp-admin",
+        "/.env",
+        "/.git/config",
+        "/admin"
+      ]
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "SUSPICIOUS_USER_AGENT",
+      "ip": "203.0.113.77",
+      "description": "203.0.113.77 used suspicious agent: sqlmap/1.6",
+      "timestamp": null,
+      "evidence": [
+        "sqlmap/1.6"
+      ]
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "SUSPICIOUS_USER_AGENT",
+      "ip": "198.51.100.1",
+      "description": "198.51.100.1 used suspicious agent: curl/7.68",
+      "timestamp": null,
+      "evidence": [
+        "curl/7.68"
+      ]
+    }
+  ]
+}
